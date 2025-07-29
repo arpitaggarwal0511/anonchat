@@ -1,7 +1,7 @@
 // src/lib/socket.ts
 import { io, Socket } from 'socket.io-client';
 
-const URL = 'http://localhost:3001'; // Backend server URL
+const URL = 'https://chat-server-d44b.onrender.com'; // Backend server URL
 
 let socket: Socket | null = null;
 
