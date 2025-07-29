@@ -14,12 +14,17 @@ type ChatMessage = {
 export default function ChatRoom() {
   const params = useParams();
   const roomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
-
   const [username, setUsername] = useState('');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep same function reference across renders for cleanup
+  const handleReceive = (msg: ChatMessage) => {
+    console.log('📨 Received:', msg); // Debug
+    setMessages((prev) => [...prev, msg]);
+  };
 
   useEffect(() => {
     if (!roomId) return;
@@ -39,15 +44,21 @@ export default function ChatRoom() {
     const socket = getSocket();
     socketRef.current = socket;
 
-    socket.emit('join-room', roomId, stored);
+    if (socket.connected) {
+      socket.emit('join-room', roomId, stored);
+    } else {
+      socket.on('connect', () => {
+        console.log('✅ Connected after reconnect');
+        socket.emit('join-room', roomId, stored);
+      });
+    }
 
-    socket.on('receive-message', (msg: ChatMessage) => {
-      setMessages((prev) => [...prev, msg]);
-    });
+    socket.on('receive-message', handleReceive);
 
     return () => {
-      socket.off('receive-message');
-      socket.off('previous-messages');
+      console.log('🧹 Cleaning up socket listeners');
+      socket.off('receive-message', handleReceive);
+      socket.off('connect'); // Cleanup any reconnect listeners too
     };
   }, [roomId]);
 
@@ -56,24 +67,18 @@ export default function ChatRoom() {
   }, [messages]);
 
   const sendMessage = () => {
-  if (!message.trim()) return;
+    if (!message.trim()) return;
 
-  const msgObj: ChatMessage = {
-    user: username,
-    text: message.trim(),
-    timestamp: new Date().toISOString(),
+    const msgObj: ChatMessage = {
+      user: username,
+      text: message.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    // setMessages((prev) => [...prev, msgObj]);
+    socketRef.current?.emit('send-message', roomId, msgObj);
+    setMessage('');
   };
-
-  // ✅ Immediately add message to local state
-  setMessages((prev) => [...prev, msgObj]);
-
-  // ✅ Send to server
-  socketRef.current?.emit('send-message', roomId, msgObj);
-
-  setMessage('');
-};
-
-
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col max-w-2xl mx-auto">
@@ -126,7 +131,6 @@ export default function ChatRoom() {
           className="flex-1 border border-gray-300 px-4 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-500"
           placeholder="Type a message..."
         />
-
         <button
           onClick={sendMessage}
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-blue-400"

@@ -11,10 +11,15 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'https://anonchatrooms.netlify.app/',
+    origin: [
+  'http://localhost:3000',
+  'https://anon-chat-frontend.vercel.app', // your actual frontend URL
+]
+,
     methods: ['GET', 'POST'],
   },
 });
+
 
 io.on('connection', (socket) => {
   console.log('🟢 New user connected:', socket.id);
