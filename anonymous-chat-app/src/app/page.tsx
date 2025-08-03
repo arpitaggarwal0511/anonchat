@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
+import Footer from './Footer';
 
 export default function Home() {
   const router = useRouter();
@@ -23,6 +24,13 @@ export default function Home() {
       >
         ➕ Create New Room
       </button>
+
+      <>
+        <Footer />
+      </>
+
     </div>
+
+
   );
 }
