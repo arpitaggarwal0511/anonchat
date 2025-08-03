@@ -2,7 +2,7 @@
 
 A real-time anonymous chat application built with **Next.js**, **Node.js**, **Socket.IO**, and optionally **MongoDB** for message persistence.
 
-**Live Demo:** [anon-chat-frontend.vercel.app](https://anonchat-mocha.vercel.app/)
+**Live Demo:** [anonchat](https://anonchat-mocha.vercel.app/)
 
 ---
 
