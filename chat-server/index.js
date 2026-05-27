@@ -14,6 +14,8 @@ const io = new Server(server, {
     origin: [
       'http://localhost:3000',
       'https://anon-chat-frontend.vercel.app',
+        'https://anonchatrooms.netlify.app',
+
     ],
     methods: ['GET', 'POST'],
   },
