@@ -6,6 +6,7 @@ import {
   FormEvent,
   KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -29,6 +30,12 @@ type ChatMessage = {
   timestamp: string;
 };
 
+type VoiceSignal = {
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+};
+
 const EMOJI_OPTIONS = ['😀', '😂', '😍', '😎', '😭', '😡', '👍', '🙏', '🔥', '🎉', '❤️', '✨'];
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
@@ -50,10 +57,19 @@ export default function ChatRoom() {
   const [isDark, setIsDark] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [activeImage, setActiveImage] = useState<{ src: string; alt: string } | null>(null);
+  const [isVoiceOn, setIsVoiceOn] = useState(false);
+  const [voicePeers, setVoicePeers] = useState(0);
+  const [chatLatency, setChatLatency] = useState<number | null>(null);
+  const [voiceLatency, setVoiceLatency] = useState<number | null>(null);
+  const [networkSpeed, setNetworkSpeed] = useState('Unknown');
+  const [connectionStatus, setConnectionStatus] = useState('Connecting');
   const socketRef = useRef<Socket | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const remoteAudioRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   useEffect(() => {
     setIsDark(localStorage.getItem('anon-theme') === 'dark');
@@ -62,6 +78,113 @@ export default function ChatRoom() {
   useEffect(() => {
     localStorage.setItem('anon-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
+
+  const removeVoicePeer = (peerId: string) => {
+    peersRef.current.get(peerId)?.close();
+    peersRef.current.delete(peerId);
+
+    const audio = remoteAudioRef.current.get(peerId);
+    if (audio) {
+      audio.pause();
+      audio.srcObject = null;
+    }
+    remoteAudioRef.current.delete(peerId);
+    setVoicePeers(peersRef.current.size);
+  };
+
+  const createVoicePeer = (peerId: string) => {
+    const existing = peersRef.current.get(peerId);
+    if (existing) return existing;
+
+    const socket = socketRef.current;
+    if (!socket || !roomId) return null;
+
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+
+    const localStream = localStreamRef.current;
+    localStream?.getTracks().forEach((track) => {
+      peer.addTrack(track, localStream);
+    });
+
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      socket.emit('voice-signal', roomId, {
+        to: peerId,
+        signal: { candidate: event.candidate.toJSON() },
+      });
+    };
+
+    peer.ontrack = (event) => {
+      const [stream] = event.streams;
+      if (!stream || remoteAudioRef.current.has(peerId)) return;
+
+      const audio = new Audio();
+      audio.srcObject = stream;
+      audio.autoplay = true;
+      audio.setAttribute('playsinline', 'true');
+      remoteAudioRef.current.set(peerId, audio);
+      audio.play().catch(() => {
+        setStatusMessage('Tap Voice again if your browser blocks remote audio.');
+      });
+    };
+
+    peer.onconnectionstatechange = () => {
+      if (['closed', 'failed', 'disconnected'].includes(peer.connectionState)) {
+        removeVoicePeer(peerId);
+      }
+    };
+
+    peersRef.current.set(peerId, peer);
+    setVoicePeers(peersRef.current.size);
+    return peer;
+  };
+
+  const stopVoiceChat = () => {
+    socketRef.current?.emit('voice-leave', roomId);
+    peersRef.current.forEach((peer) => peer.close());
+    peersRef.current.clear();
+    remoteAudioRef.current.forEach((audio) => {
+      audio.pause();
+      audio.srcObject = null;
+    });
+    remoteAudioRef.current.clear();
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+    setIsVoiceOn(false);
+    setVoicePeers(0);
+    setVoiceLatency(null);
+  };
+
+  const startVoiceChat = async () => {
+    if (!roomId || !socketRef.current) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      localStreamRef.current = stream;
+      setIsVoiceOn(true);
+      setStatusMessage('Voice chat is on. Others in this room can join and talk.');
+      socketRef.current.emit('voice-join', roomId);
+    } catch {
+      setStatusMessage('Microphone permission was blocked or unavailable.');
+    }
+  };
+
+  const toggleVoiceChat = () => {
+    if (isVoiceOn) {
+      stopVoiceChat();
+      return;
+    }
+
+    startVoiceChat();
+  };
 
   useEffect(() => {
     if (!roomId) return;
@@ -90,6 +213,53 @@ export default function ChatRoom() {
       setMessages((prev) => [...prev, msg]);
     };
 
+    const handleVoiceUsers = async (peerIds: string[]) => {
+      if (!localStreamRef.current) return;
+
+      for (const peerId of peerIds) {
+        const peer = createVoicePeer(peerId);
+        if (!peer) continue;
+
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit('voice-signal', roomId, {
+          to: peerId,
+          signal: { offer },
+        });
+      }
+    };
+
+    const handleVoiceSignal = async ({
+      from,
+      signal,
+    }: {
+      from: string;
+      signal: VoiceSignal;
+    }) => {
+      if (!localStreamRef.current) return;
+
+      const peer = createVoicePeer(from);
+      if (!peer) return;
+
+      if (signal.offer) {
+        await peer.setRemoteDescription(new RTCSessionDescription(signal.offer));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit('voice-signal', roomId, {
+          to: from,
+          signal: { answer },
+        });
+      }
+
+      if (signal.answer) {
+        await peer.setRemoteDescription(new RTCSessionDescription(signal.answer));
+      }
+
+      if (signal.candidate) {
+        await peer.addIceCandidate(new RTCIceCandidate(signal.candidate));
+      }
+    };
+
     if (socket.connected) {
       socket.emit('join-room', roomId, stored);
     } else {
@@ -97,16 +267,112 @@ export default function ChatRoom() {
     }
 
     socket.on('receive-message', handleReceive);
+    socket.on('voice-users', handleVoiceUsers);
+    socket.on('voice-signal', handleVoiceSignal);
+    socket.on('voice-user-left', removeVoicePeer);
 
     return () => {
       socket.off('receive-message', handleReceive);
       socket.off('connect', handleConnect);
+      socket.off('voice-users', handleVoiceUsers);
+      socket.off('voice-signal', handleVoiceSignal);
+      socket.off('voice-user-left', removeVoicePeer);
     };
+    // Voice helpers intentionally read live refs; listeners only need to reset per room.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const updateStats = () => {
+      const socket = socketRef.current;
+      setConnectionStatus(socket?.connected ? 'Online' : navigator.onLine ? 'Reconnecting' : 'Offline');
+
+      const connection = (
+        navigator as Navigator & {
+          connection?: { downlink?: number; effectiveType?: string };
+        }
+      ).connection;
+
+      if (connection?.downlink) {
+        setNetworkSpeed(`${connection.downlink.toFixed(1)} Mbps ${connection.effectiveType || ''}`.trim());
+      }
+
+      if (socket?.connected) {
+        const sentAt = performance.now();
+        socket.timeout(2000).emit('latency-ping', (error?: Error) => {
+          if (error) {
+            setChatLatency(null);
+            return;
+          }
+
+          setChatLatency(Math.round(performance.now() - sentAt));
+        });
+      }
+    };
+
+    updateStats();
+    const interval = window.setInterval(updateStats, 3000);
+    window.addEventListener('online', updateStats);
+    window.addEventListener('offline', updateStats);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('online', updateStats);
+      window.removeEventListener('offline', updateStats);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVoiceOn) {
+      setVoiceLatency(null);
+      return;
+    }
+
+    const interval = window.setInterval(async () => {
+      let latestLatency: number | null = null;
+
+      for (const peer of peersRef.current.values()) {
+        const stats = await peer.getStats();
+        stats.forEach((report) => {
+          const candidatePair = report as RTCStats & {
+            state?: string;
+            currentRoundTripTime?: number;
+          };
+
+          if (
+            candidatePair.type === 'candidate-pair' &&
+            candidatePair.state === 'succeeded' &&
+            typeof candidatePair.currentRoundTripTime === 'number'
+          ) {
+            latestLatency = Math.round(candidatePair.currentRoundTripTime * 1000);
+          }
+        });
+      }
+
+      setVoiceLatency(latestLatency);
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [isVoiceOn]);
+
+  useEffect(() => {
+    return () => stopVoiceChat();
+    // Cleanup should only run when this chat page unmounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useLayoutEffect(() => {
+    const chatPane = chatScrollRef.current;
+    if (!chatPane) return;
+
+    chatPane.scrollTop = chatPane.scrollHeight;
   }, [messages]);
+
+  const keepInputFocused = () => {
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    });
+  };
 
   const sendChatMessage = (
     payload: Pick<ChatMessage, 'text' | 'image' | 'imageName' | 'attachment'>
@@ -127,6 +393,7 @@ export default function ChatRoom() {
     sendChatMessage({ text: message });
     setMessage('');
     setShowEmojiPicker(false);
+    keepInputFocused();
   };
 
   const sendFile = (file: File) => {
@@ -149,6 +416,7 @@ export default function ChatRoom() {
           size: file.size,
         },
       });
+      keepInputFocused();
     };
     reader.readAsDataURL(file);
   };
@@ -169,6 +437,7 @@ export default function ChatRoom() {
         image: reader.result,
         imageName: file.name || 'Pasted image',
       });
+      keepInputFocused();
     };
     reader.readAsDataURL(file);
   };
@@ -205,7 +474,7 @@ export default function ChatRoom() {
 
   const addEmoji = (emoji: string) => {
     setMessage((current) => `${current}${emoji}`);
-    inputRef.current?.focus();
+    keepInputFocused();
   };
 
   const copyRoomCode = async () => {
@@ -232,9 +501,9 @@ export default function ChatRoom() {
   const softClass = isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600';
 
   return (
-    <div className={`min-h-screen ${shellClass}`}>
-      <div className={`mx-auto flex min-h-screen max-w-4xl flex-col shadow-2xl ${panelClass}`}>
-        <header className={`border-b px-4 py-3 backdrop-blur sm:px-6 ${headerClass}`}>
+    <div className={`h-[100dvh] overflow-hidden ${shellClass}`}>
+      <div className={`mx-auto flex h-[100dvh] max-w-4xl flex-col overflow-hidden shadow-2xl ${panelClass}`}>
+        <header className={`sticky top-0 z-20 shrink-0 border-b px-4 py-3 backdrop-blur sm:px-6 ${headerClass}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">
@@ -299,7 +568,10 @@ export default function ChatRoom() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto px-4 py-5 sm:px-6 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+        <main
+          ref={chatScrollRef}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}
+        >
           <div className="space-y-3">
             {messages.length === 0 ? (
               <div className="flex h-[55vh] items-center justify-center text-center">
@@ -390,13 +662,12 @@ export default function ChatRoom() {
                     </div>
                   );
                 })}
-                <div ref={chatEndRef} />
               </>
             )}
           </div>
         </main>
 
-        <footer className={`border-t px-4 py-3 sm:px-6 ${headerClass}`}>
+        <footer className={`shrink-0 border-t px-3 py-2 sm:px-6 sm:py-3 ${headerClass}`}>
           {statusMessage && (
             <p className={`mb-2 text-sm ${statusMessage.includes('large') ? 'text-red-500' : 'text-blue-500'}`}>
               {statusMessage}
@@ -412,6 +683,7 @@ export default function ChatRoom() {
                 <button
                   type="button"
                   key={emoji}
+                  onPointerDown={(event) => event.preventDefault()}
                   onClick={() => addEmoji(emoji)}
                   className={`rounded-xl p-2 text-xl shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                     isDark ? 'bg-slate-900 hover:bg-slate-700' : 'bg-white hover:bg-blue-50'
@@ -423,25 +695,53 @@ export default function ChatRoom() {
               ))}
             </div>
           )}
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-            {EMOJI_OPTIONS.slice(0, 6).map((emoji) => (
-              <button
-                type="button"
-                key={`quick-${emoji}`}
-                onClick={() => addEmoji(emoji)}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-blue-50'
-                }`}
-                title={`Add ${emoji}`}
-              >
-                {emoji}
-              </button>
-            ))}
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
+              {EMOJI_OPTIONS.slice(0, 6).map((emoji) => (
+                <button
+                  type="button"
+                  key={`quick-${emoji}`}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => addEmoji(emoji)}
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-blue-50'
+                  }`}
+                  title={`Add ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div
+              className={`grid grid-cols-2 gap-x-3 gap-y-1 rounded-2xl px-3 py-2 text-[11px] sm:flex sm:items-center sm:gap-3 ${
+                isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <span>
+                <b className={isDark ? 'text-slate-100' : 'text-slate-800'}>Net</b> {connectionStatus}
+              </span>
+              <span>
+                <b className={isDark ? 'text-slate-100' : 'text-slate-800'}>Speed</b> {networkSpeed}
+              </span>
+              <span>
+                <b className={isDark ? 'text-slate-100' : 'text-slate-800'}>Chat</b>{' '}
+                {chatLatency === null ? '--' : `${chatLatency}ms`}
+              </span>
+              <span>
+                <b className={isDark ? 'text-slate-100' : 'text-slate-800'}>Voice</b>{' '}
+                {isVoiceOn
+                  ? `${voicePeers} peer${voicePeers === 1 ? '' : 's'} / ${
+                      voiceLatency === null ? 'linking' : `${voiceLatency}ms`
+                    }`
+                  : 'off'}
+              </span>
+            </div>
           </div>
           <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => setShowEmojiPicker((open) => !open)}
               className={`grid h-11 w-11 place-items-center rounded-full border text-xl transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                 isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
@@ -462,6 +762,21 @@ export default function ChatRoom() {
             >
               +
             </button>
+            <button
+              type="button"
+              onClick={toggleVoiceChat}
+              className={`grid h-11 w-11 place-items-center rounded-full border text-xl transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                isVoiceOn
+                  ? 'border-emerald-300 bg-emerald-500 text-white'
+                  : isDark
+                    ? 'border-slate-700 bg-slate-800'
+                    : 'border-slate-200 bg-white'
+              }`}
+              aria-label={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
+              title={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
+            >
+              {isVoiceOn ? '●' : '☎'}
+            </button>
             <input
               ref={inputRef}
               value={message}
@@ -477,6 +792,7 @@ export default function ChatRoom() {
             />
             <button
               type="button"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={sendMessage}
               className="rounded-full bg-blue-600 px-5 py-3 font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:bg-slate-400"
               disabled={!message.trim()}
