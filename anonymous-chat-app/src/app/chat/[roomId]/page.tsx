@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { useParams } from 'next/navigation';
 import { Socket } from 'socket.io-client';
-import { getSocket } from '@/lib/socket';
+import { getSocket, getSocketUrl } from '@/lib/socket';
 
 type Attachment = {
   data: string;
@@ -78,6 +78,7 @@ export default function ChatRoom() {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [networkSpeed, setNetworkSpeed] = useState('Unknown');
   const [connectionStatus, setConnectionStatus] = useState('Connecting');
+  const [socketUrl] = useState(getSocketUrl);
   const socketRef = useRef<Socket | null>(null);
   const chatScrollRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -387,6 +388,15 @@ export default function ChatRoom() {
         setNetworkSpeed(`${connection.downlink.toFixed(1)} Mbps ${connection.effectiveType || ''}`.trim());
       }
 
+      if (socket && !socket.connected) {
+        const usingLocalhost = socketUrl.includes('localhost') || socketUrl.includes('127.0.0.1');
+        setStatusMessage(
+          usingLocalhost
+            ? 'Socket URL is still localhost. Set NEXT_PUBLIC_SOCKET_URL on Netlify and redeploy.'
+            : `Chat server reconnecting: ${socketUrl}`
+        );
+      }
+
       if (socket?.connected) {
         const sentAt = performance.now();
         socket.timeout(2000).emit('latency-ping', (error?: Error) => {
@@ -410,7 +420,7 @@ export default function ChatRoom() {
       window.removeEventListener('online', updateStats);
       window.removeEventListener('offline', updateStats);
     };
-  }, []);
+  }, [socketUrl]);
 
   useEffect(() => {
     if (!isVoiceOn) {

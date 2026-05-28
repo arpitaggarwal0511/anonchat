@@ -19,3 +19,5 @@ export const getSocket = (): Socket => {
 
   return socket;
 };
+
+export const getSocketUrl = (): string => URL;

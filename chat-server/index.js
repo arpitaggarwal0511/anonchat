@@ -9,20 +9,53 @@ const voiceRooms = {};
 const getVoiceUsers = (roomId) =>
   Array.from(voiceRooms[roomId]?.values() || []);
 
-const app = express();
-app.use(cors());
+const configuredOrigins = (process.env.FRONTEND_URLS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'https://anon-chat-frontend.vercel.app',
+  'https://anonchatrooms.netlify.app',
+  ...configuredOrigins,
+]);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      allowedOrigins.has(origin) ||
+      hostname.endsWith('.netlify.app') ||
+      hostname.endsWith('.vercel.app')
+    );
+  } catch {
+    return false;
+  }
+};
+
+const app = express();
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin));
+    },
+  })
+);
+
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'anonchat socket server' });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://anon-chat-frontend.vercel.app',
-        'https://anonchatrooms.netlify.app',
-
-    ],
-    methods: ['GET', 'POST'],
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin));
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
   },
 });
 
