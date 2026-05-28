@@ -36,6 +36,19 @@ type VoiceSignal = {
   candidate?: RTCIceCandidateInit;
 };
 
+type VoiceStats = {
+  speed?: string;
+  quality?: 'Good' | 'Fair' | 'Poor' | 'Unknown';
+  latency?: number | null;
+  connection?: string;
+};
+
+type VoiceParticipant = {
+  id: string;
+  name: string;
+  stats?: VoiceStats;
+};
+
 const EMOJI_OPTIONS = ['😀', '😂', '😍', '😎', '😭', '😡', '👍', '🙏', '🔥', '🎉', '❤️', '✨'];
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
@@ -61,6 +74,8 @@ export default function ChatRoom() {
   const [voicePeers, setVoicePeers] = useState(0);
   const [chatLatency, setChatLatency] = useState<number | null>(null);
   const [voiceLatency, setVoiceLatency] = useState<number | null>(null);
+  const [voiceParticipants, setVoiceParticipants] = useState<VoiceParticipant[]>([]);
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [networkSpeed, setNetworkSpeed] = useState('Unknown');
   const [connectionStatus, setConnectionStatus] = useState('Connecting');
   const socketRef = useRef<Socket | null>(null);
@@ -79,6 +94,39 @@ export default function ChatRoom() {
     localStorage.setItem('anon-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  const getLocalVoiceStats = (latency: number | null = voiceLatency): VoiceStats => {
+    const connection = (
+      navigator as Navigator & {
+        connection?: { downlink?: number; effectiveType?: string };
+      }
+    ).connection;
+    const downlink = connection?.downlink;
+    const quality =
+      latency !== null && latency > 350
+        ? 'Poor'
+        : latency !== null && latency > 180
+          ? 'Fair'
+          : downlink !== undefined && downlink < 0.7
+            ? 'Poor'
+            : downlink !== undefined && downlink < 1.5
+              ? 'Fair'
+              : 'Good';
+
+    return {
+      speed: downlink ? `${downlink.toFixed(1)} Mbps ${connection?.effectiveType || ''}`.trim() : networkSpeed,
+      quality,
+      latency,
+      connection: connectionStatus,
+    };
+  };
+
+  const upsertVoiceParticipant = (participant: VoiceParticipant) => {
+    setVoiceParticipants((current) => {
+      const next = current.filter((member) => member.id !== participant.id);
+      return [...next, participant];
+    });
+  };
+
   const removeVoicePeer = (peerId: string) => {
     peersRef.current.get(peerId)?.close();
     peersRef.current.delete(peerId);
@@ -89,6 +137,7 @@ export default function ChatRoom() {
       audio.srcObject = null;
     }
     remoteAudioRef.current.delete(peerId);
+    setVoiceParticipants((current) => current.filter((member) => member.id !== peerId));
     setVoicePeers(peersRef.current.size);
   };
 
@@ -155,10 +204,17 @@ export default function ChatRoom() {
     setIsVoiceOn(false);
     setVoicePeers(0);
     setVoiceLatency(null);
+    setVoiceParticipants([]);
   };
 
   const startVoiceChat = async () => {
     if (!roomId || !socketRef.current) return;
+
+    if (!socketRef.current.connected) {
+      setStatusMessage('Chat server is reconnecting. Voice needs the socket connection first.');
+      socketRef.current.connect();
+      return;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -171,7 +227,16 @@ export default function ChatRoom() {
       localStreamRef.current = stream;
       setIsVoiceOn(true);
       setStatusMessage('Voice chat is on. Others in this room can join and talk.');
-      socketRef.current.emit('voice-join', roomId);
+      const self = {
+        id: socketRef.current.id || 'you',
+        name: username || 'You',
+        stats: getLocalVoiceStats(null),
+      };
+      setVoiceParticipants([self]);
+      socketRef.current.emit('voice-join', roomId, {
+        name: username,
+        stats: self.stats,
+      });
     } catch {
       setStatusMessage('Microphone permission was blocked or unavailable.');
     }
@@ -213,20 +278,39 @@ export default function ChatRoom() {
       setMessages((prev) => [...prev, msg]);
     };
 
-    const handleVoiceUsers = async (peerIds: string[]) => {
+    const handleVoiceUsers = async (participants: VoiceParticipant[]) => {
       if (!localStreamRef.current) return;
 
-      for (const peerId of peerIds) {
-        const peer = createVoicePeer(peerId);
+      setVoiceParticipants((current) => [
+        ...current.filter((member) => member.id === socket.id),
+        ...participants,
+      ]);
+
+      for (const participant of participants) {
+        const peer = createVoicePeer(participant.id);
         if (!peer) continue;
 
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         socket.emit('voice-signal', roomId, {
-          to: peerId,
+          to: participant.id,
           signal: { offer },
         });
       }
+    };
+
+    const handleVoiceUserJoined = (participant: VoiceParticipant) => {
+      upsertVoiceParticipant(participant);
+    };
+
+    const handleVoiceRoster = (participants: VoiceParticipant[]) => {
+      setVoiceParticipants(participants);
+    };
+
+    const handleVoiceUserStats = ({ id, stats }: { id: string; stats: VoiceStats }) => {
+      setVoiceParticipants((current) =>
+        current.map((member) => (member.id === id ? { ...member, stats } : member))
+      );
     };
 
     const handleVoiceSignal = async ({
@@ -268,6 +352,9 @@ export default function ChatRoom() {
 
     socket.on('receive-message', handleReceive);
     socket.on('voice-users', handleVoiceUsers);
+    socket.on('voice-user-joined', handleVoiceUserJoined);
+    socket.on('voice-roster', handleVoiceRoster);
+    socket.on('voice-user-stats', handleVoiceUserStats);
     socket.on('voice-signal', handleVoiceSignal);
     socket.on('voice-user-left', removeVoicePeer);
 
@@ -275,6 +362,9 @@ export default function ChatRoom() {
       socket.off('receive-message', handleReceive);
       socket.off('connect', handleConnect);
       socket.off('voice-users', handleVoiceUsers);
+      socket.off('voice-user-joined', handleVoiceUserJoined);
+      socket.off('voice-roster', handleVoiceRoster);
+      socket.off('voice-user-stats', handleVoiceUserStats);
       socket.off('voice-signal', handleVoiceSignal);
       socket.off('voice-user-left', removeVoicePeer);
     };
@@ -350,9 +440,19 @@ export default function ChatRoom() {
       }
 
       setVoiceLatency(latestLatency);
+      const stats = getLocalVoiceStats(latestLatency);
+      const selfId = socketRef.current?.id;
+      if (selfId) {
+        setVoiceParticipants((current) =>
+          current.map((member) => (member.id === selfId ? { ...member, stats } : member))
+        );
+      }
+      socketRef.current?.emit('voice-stats', roomId, stats);
     }, 3000);
 
     return () => window.clearInterval(interval);
+    // This interval reads live refs and room id while voice is enabled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVoiceOn]);
 
   useEffect(() => {
@@ -696,7 +796,82 @@ export default function ChatRoom() {
             </div>
           )}
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
+            <div className="relative flex flex-wrap gap-2 pb-1 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setShowVoiceMenu((open) => !open)}
+                className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                  isVoiceOn
+                    ? 'bg-emerald-500 text-white'
+                    : isDark
+                      ? 'bg-slate-800 text-slate-200'
+                      : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                Voice room ({voiceParticipants.length})
+              </button>
+              {showVoiceMenu && (
+                <div
+                  className={`absolute bottom-12 left-0 z-30 w-72 rounded-2xl border p-3 shadow-2xl ${
+                    isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-bold">Voice chat</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowVoiceMenu(false)}
+                      className="rounded-full px-2 text-sm opacity-70 hover:opacity-100"
+                    >
+                      x
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {voiceParticipants.length === 0 ? (
+                      <p className={isDark ? 'text-sm text-slate-400' : 'text-sm text-slate-500'}>
+                        No one is in voice chat yet.
+                      </p>
+                    ) : (
+                      voiceParticipants.map((member) => {
+                        const quality = member.stats?.quality || 'Unknown';
+                        const qualityClass =
+                          quality === 'Good'
+                            ? 'bg-emerald-500'
+                            : quality === 'Fair'
+                              ? 'bg-yellow-500'
+                              : quality === 'Poor'
+                                ? 'bg-red-500'
+                                : 'bg-slate-400';
+
+                        return (
+                          <div
+                            key={member.id}
+                            className={`rounded-xl p-2 ${
+                              isDark ? 'bg-slate-800' : 'bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-semibold">
+                                {member.id === socketRef.current?.id ? 'You' : member.name}
+                              </span>
+                              <span className="flex items-center gap-1 text-xs">
+                                <span className={`h-2 w-2 rounded-full ${qualityClass}`} />
+                                {quality}
+                              </span>
+                            </div>
+                            <p className={isDark ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs text-slate-500'}>
+                              {member.stats?.speed || 'Speed unknown'} ·{' '}
+                              {member.stats?.latency === null || member.stats?.latency === undefined
+                                ? 'Latency linking'
+                                : `${member.stats.latency}ms`}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
               {EMOJI_OPTIONS.slice(0, 6).map((emoji) => (
                 <button
                   type="button"
@@ -730,9 +905,11 @@ export default function ChatRoom() {
               <span>
                 <b className={isDark ? 'text-slate-100' : 'text-slate-800'}>Voice</b>{' '}
                 {isVoiceOn
-                  ? `${voicePeers} peer${voicePeers === 1 ? '' : 's'} / ${
-                      voiceLatency === null ? 'linking' : `${voiceLatency}ms`
-                    }`
+                  ? voicePeers === 0
+                    ? 'waiting'
+                    : `${voicePeers} peer${voicePeers === 1 ? '' : 's'} / ${
+                        voiceLatency === null ? 'linking' : `${voiceLatency}ms`
+                      }`
                   : 'off'}
               </span>
             </div>

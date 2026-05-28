@@ -6,6 +6,9 @@ const cors = require('cors');
 const rooms = {};
 const voiceRooms = {};
 
+const getVoiceUsers = (roomId) =>
+  Array.from(voiceRooms[roomId]?.values() || []);
+
 const app = express();
 app.use(cors());
 
@@ -36,6 +39,8 @@ io.on('connection', (socket) => {
 
     if (voiceRooms[roomId].size === 0) {
       delete voiceRooms[roomId];
+    } else {
+      io.in(roomId).emit('voice-roster', getVoiceUsers(roomId));
     }
   };
 
@@ -89,16 +94,23 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback();
   });
 
-  socket.on('voice-join', (roomId) => {
-    if (!voiceRooms[roomId]) voiceRooms[roomId] = new Set();
+  socket.on('voice-join', (roomId, user = {}) => {
+    if (!voiceRooms[roomId]) voiceRooms[roomId] = new Map();
 
-    const existingVoiceUsers = Array.from(voiceRooms[roomId]).filter((id) => id !== socket.id);
-    voiceRooms[roomId].add(socket.id);
+    const voiceUser = {
+      id: socket.id,
+      name: typeof user.name === 'string' && user.name.trim() ? user.name.trim() : 'Anonymous',
+      stats: user.stats && typeof user.stats === 'object' ? user.stats : {},
+      joinedAt: new Date().toISOString(),
+    };
+    const existingVoiceUsers = getVoiceUsers(roomId).filter((member) => member.id !== socket.id);
+    voiceRooms[roomId].set(socket.id, voiceUser);
     socket.data.voiceRooms.add(roomId);
     socket.join(roomId);
 
     socket.emit('voice-users', existingVoiceUsers);
-    socket.to(roomId).emit('voice-user-joined', socket.id);
+    socket.to(roomId).emit('voice-user-joined', voiceUser);
+    io.in(roomId).emit('voice-roster', getVoiceUsers(roomId));
   });
 
   socket.on('voice-signal', (roomId, { to, signal }) => {
@@ -112,6 +124,18 @@ io.on('connection', (socket) => {
 
   socket.on('voice-leave', (roomId) => {
     leaveVoiceRoom(roomId);
+    io.in(roomId).emit('voice-roster', getVoiceUsers(roomId));
+  });
+
+  socket.on('voice-stats', (roomId, stats = {}) => {
+    const member = voiceRooms[roomId]?.get(socket.id);
+    if (!member) return;
+
+    member.stats = stats;
+    socket.to(roomId).emit('voice-user-stats', {
+      id: socket.id,
+      stats,
+    });
   });
 
   socket.on('disconnect', () => {
