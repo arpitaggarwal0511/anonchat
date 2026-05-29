@@ -70,7 +70,7 @@ export function ChatHeader({
             type="button"
             onClick={() => setIsDark((current) => !current)}
             className={`grid h-10 w-10 place-items-center rounded-full border text-lg transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-              isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+              isDark ? 'border-[#2a3942] bg-[#202c33] text-[#d1d7db]' : 'border-slate-200 bg-white'
             }`}
             aria-label={isDark ? 'Switch to white mode' : 'Switch to dark mode'}
             title={isDark ? 'Switch to white mode' : 'Switch to dark mode'}

@@ -109,11 +109,11 @@ export default function ChatRoom() {
   };
 
   const shellClass = isDark
-    ? 'bg-slate-950 text-slate-100'
+    ? 'bg-black text-slate-100'
     : 'bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_32%),#f8fafc] text-slate-950';
-  const panelClass = isDark ? 'bg-slate-900 shadow-blue-950/30' : 'bg-white shadow-slate-300/70';
-  const headerClass = isDark ? 'border-slate-800 bg-slate-900/95' : 'border-slate-200 bg-white/95';
-  const softClass = isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600';
+  const panelClass = isDark ? 'bg-black shadow-black' : 'bg-white shadow-slate-300/70';
+  const headerClass = isDark ? 'border-[#202c33] bg-[#111b21]/95' : 'border-slate-200 bg-white/95';
+  const softClass = isDark ? 'bg-[#202c33] text-[#d1d7db]' : 'bg-slate-100 text-slate-600';
 
   return (
     <div className={`h-[100dvh] overflow-hidden ${shellClass}`}>

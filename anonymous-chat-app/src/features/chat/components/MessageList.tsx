@@ -25,7 +25,7 @@ export function MessageList({
     <main
       ref={chatScrollRef}
       className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 ${
-        isDark ? 'bg-slate-950' : 'bg-slate-50'
+        isDark ? 'bg-black' : 'bg-slate-50'
       }`}
     >
       <div className="space-y-3">
@@ -56,15 +56,15 @@ export function MessageList({
                 <div
                   className={`overflow-hidden rounded-3xl px-3 py-2 text-sm shadow-sm ${
                     isOwn
-                      ? 'rounded-br-md bg-[#123b8c] text-white shadow-blue-950/30'
+                      ? 'rounded-br-md bg-[#005c4b] text-white shadow-black/30'
                       : isDark
-                        ? 'rounded-bl-md bg-slate-800 text-slate-100'
+                        ? 'rounded-bl-md bg-[#202c33] text-[#f0f2f5]'
                         : 'rounded-bl-md bg-white text-slate-900'
                   }`}
                 >
                   <p
                     className={`mb-1 text-xs font-semibold ${
-                      isOwn ? 'text-blue-100' : isDark ? 'text-slate-400' : 'text-slate-500'
+                      isOwn ? 'text-[#b8e6dc]' : isDark ? 'text-[#aebac1]' : 'text-slate-500'
                     }`}
                   >
                     {isOwn ? 'You' : message.user}
@@ -115,8 +115,8 @@ export function MessageList({
                       <span
                         className={
                           hasBeenRead
-                            ? 'font-black text-[#22ff66] drop-shadow-[0_0_6px_rgba(34,255,102,0.95)]'
-                            : 'font-semibold text-slate-300'
+                            ? 'font-bold text-[#53bdeb]'
+                            : 'font-semibold text-[#aebac1]'
                         }
                         title={hasBeenRead ? 'Seen' : 'Delivered'}
                       >
