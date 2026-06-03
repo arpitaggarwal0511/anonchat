@@ -108,28 +108,19 @@ export default function ChatRoom() {
     setStatusMessage('Room code copied.');
   };
 
-  const shellClass = isDark
-    ? 'bg-black text-slate-100'
-    : 'bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_32%),#f8fafc] text-slate-950';
-  const panelClass = isDark ? 'bg-black shadow-black' : 'bg-white shadow-slate-300/70';
-  const headerClass = isDark ? 'border-[#202c33] bg-[#111b21]/95' : 'border-slate-200 bg-white/95';
-  const softClass = isDark ? 'bg-[#202c33] text-[#d1d7db]' : 'bg-slate-100 text-slate-600';
+  const shellClass = isDark ? 'bg-[#0b141a] text-[#e9edef]' : 'bg-[#efeae2] text-[#111b21]';
+  const panelClass = isDark ? 'bg-[#0b141a] shadow-black' : 'bg-[#efeae2] shadow-[#d1d7db]';
+  const headerClass = isDark ? 'border-[#222e35] bg-[#202c33]/95' : 'border-[#d1d7db] bg-[#f0f2f5]/95';
 
   return (
     <div className={`h-[100dvh] overflow-hidden ${shellClass}`}>
-      <div className={`mx-auto flex h-[100dvh] max-w-4xl flex-col overflow-hidden shadow-2xl ${panelClass}`}>
+      <div className={`mx-auto flex h-[100dvh] max-w-6xl flex-col overflow-hidden shadow-2xl ${panelClass}`}>
         <ChatHeader
           roomId={roomId}
           username={user.username}
-          draftUsername={user.draftUsername}
-          isEditingName={user.isEditingName}
           isDark={isDark}
           headerClass={headerClass}
-          softClass={softClass}
-          setDraftUsername={user.setDraftUsername}
-          setIsEditingName={user.setIsEditingName}
           setIsDark={setIsDark}
-          saveUsername={user.saveUsername}
           copyRoomCode={copyRoomCode}
         />
 

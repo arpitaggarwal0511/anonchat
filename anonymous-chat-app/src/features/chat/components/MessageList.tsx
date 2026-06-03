@@ -24,15 +24,18 @@ export function MessageList({
   return (
     <main
       ref={chatScrollRef}
-      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 ${
-        isDark ? 'bg-black' : 'bg-slate-50'
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-6 sm:py-5 ${
+        isDark ? 'wa-chat-bg-dark' : 'wa-chat-bg-light'
       }`}
     >
       <div className="space-y-3">
         {messages.length === 0 ? (
           <div className="flex h-[55vh] items-center justify-center text-center">
-            <div className={isDark ? 'text-slate-400' : 'text-slate-500'}>
-              <p className={`text-lg font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+            <div className={isDark ? 'text-[#8696a0]' : 'text-[#667781]'}>
+              <div className={`mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full ${isDark ? 'bg-[#202c33]' : 'bg-[#f0f2f5]'}`}>
+                <span className="text-2xl text-[#00a884]">S</span>
+              </div>
+              <p className={`text-lg font-semibold ${isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}`}>
                 Your room is ready
               </p>
               <p className="mt-1 text-sm">Share the code, send a message, or attach a file.</p>
@@ -51,20 +54,28 @@ export function MessageList({
             return (
               <div
                 key={`${message.timestamp}-${index}`}
-                className={`flex w-fit max-w-[84%] flex-col ${isOwn ? 'ml-auto items-end' : 'items-start'}`}
+                className={`flex w-fit max-w-[88%] flex-col sm:max-w-[76%] ${isOwn ? 'ml-auto items-end' : 'items-start'}`}
               >
                 <div
-                  className={`overflow-hidden rounded-3xl px-3 py-2 text-sm shadow-sm ${
+                  className={`overflow-hidden rounded-2xl px-3 py-2 text-sm shadow-sm ${
                     isOwn
-                      ? 'rounded-br-md bg-[#005c4b] text-white shadow-black/30'
+                      ? isDark
+                        ? 'rounded-br-md bg-[#005c4b] text-[#e9edef] shadow-black/30'
+                        : 'rounded-br-md bg-[#d9fdd3] text-[#111b21]'
                       : isDark
                         ? 'rounded-bl-md bg-[#202c33] text-[#f0f2f5]'
-                        : 'rounded-bl-md bg-white text-slate-900'
+                        : 'rounded-bl-md bg-white text-[#111b21]'
                   }`}
                 >
                   <p
                     className={`mb-1 text-xs font-semibold ${
-                      isOwn ? 'text-[#b8e6dc]' : isDark ? 'text-[#aebac1]' : 'text-slate-500'
+                      isOwn
+                        ? isDark
+                          ? 'text-[#b8e6dc]'
+                          : 'text-[#008069]'
+                        : isDark
+                          ? 'text-[#aebac1]'
+                          : 'text-[#667781]'
                     }`}
                   >
                     {isOwn ? 'You' : message.user}
@@ -94,13 +105,15 @@ export function MessageList({
                       download={attachment.name}
                       className={`mb-2 flex min-w-56 items-center gap-3 rounded-2xl p-3 transition ${
                         isOwn
-                          ? 'bg-blue-500 hover:bg-blue-400'
+                          ? isDark
+                            ? 'bg-[#0b6b58] hover:bg-[#0a8068]'
+                            : 'bg-[#c5f2c2] hover:bg-[#b7eeb3]'
                           : isDark
-                            ? 'bg-slate-700 hover:bg-slate-600'
-                            : 'bg-slate-100 hover:bg-slate-200'
+                            ? 'bg-[#2a3942] hover:bg-[#33444d]'
+                            : 'bg-[#f0f2f5] hover:bg-[#e9edef]'
                       }`}
                     >
-                      <span className="grid h-10 w-10 place-items-center rounded-full bg-white/20 text-lg">
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-[#00a884]/20 text-sm font-bold text-[#00a884]">
                         DL
                       </span>
                       <span className="min-w-0">
@@ -116,7 +129,9 @@ export function MessageList({
                         className={
                           hasBeenRead
                             ? 'font-bold text-[#53bdeb]'
-                            : 'font-semibold text-[#aebac1]'
+                            : isDark
+                              ? 'font-semibold text-[#aebac1]'
+                              : 'font-semibold text-[#667781]'
                         }
                         title={hasBeenRead ? 'Seen' : 'Delivered'}
                       >
@@ -125,7 +140,9 @@ export function MessageList({
                       <button
                         type="button"
                         onClick={() => setInfoMessageId((current) => (current === message.id ? null : message.id))}
-                        className="rounded-full bg-white/10 px-2 py-0.5 font-semibold transition hover:bg-white/20"
+                        className={`rounded-full px-2 py-0.5 font-semibold transition ${
+                          isDark ? 'bg-white/10 hover:bg-white/20' : 'bg-[#008069]/10 text-[#008069] hover:bg-[#008069]/20'
+                        }`}
                       >
                         Info
                       </button>
@@ -136,8 +153,8 @@ export function MessageList({
                   <div
                     className={`mt-2 w-64 rounded-2xl border p-3 text-xs shadow-xl ${
                       isDark
-                        ? 'border-slate-700 bg-slate-900 text-slate-200'
-                        : 'border-slate-200 bg-white text-slate-700'
+                        ? 'border-[#222e35] bg-[#111b21] text-[#e9edef]'
+                        : 'border-[#d1d7db] bg-white text-[#3b4a54]'
                     }`}
                   >
                     <div className="mb-2 flex items-center justify-between">
@@ -151,7 +168,7 @@ export function MessageList({
                       </button>
                     </div>
                     {readBy.length === 0 ? (
-                      <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+                      <p className={isDark ? 'text-[#8696a0]' : 'text-[#667781]'}>
                         No one has seen this yet.
                       </p>
                     ) : (
@@ -159,7 +176,7 @@ export function MessageList({
                         {readBy.map((reader) => (
                           <div key={reader.userId} className="flex items-center justify-between gap-2">
                             <span className="truncate font-semibold">{reader.username}</span>
-                            <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+                            <span className={isDark ? 'text-[#8696a0]' : 'text-[#667781]'}>
                               {new Date(reader.readAt).toLocaleTimeString()}
                             </span>
                           </div>
@@ -168,7 +185,7 @@ export function MessageList({
                     )}
                   </div>
                 )}
-                <span className={`mt-1 text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                <span className={`mt-1 text-xs ${isDark ? 'text-[#8696a0]' : 'text-[#667781]'}`}>
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </span>
               </div>

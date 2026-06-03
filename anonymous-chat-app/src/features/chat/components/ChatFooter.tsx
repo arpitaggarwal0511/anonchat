@@ -60,7 +60,15 @@ export function ChatFooter({
   return (
     <footer className={`shrink-0 border-t px-3 py-2 sm:px-6 sm:py-3 ${headerClass}`}>
       {statusMessage && (
-        <p className={`mb-2 text-sm ${statusMessage.includes('large') ? 'text-red-500' : 'text-blue-500'}`}>
+        <p
+          className={`mb-2 rounded-xl px-3 py-2 text-sm ${
+            statusMessage.includes('large')
+              ? 'bg-[#ef4444]/10 text-[#ef4444]'
+              : isDark
+                ? 'bg-[#00a884]/10 text-[#00a884]'
+                : 'bg-[#d9fdd3] text-[#008069]'
+          }`}
+        >
           {statusMessage}
         </p>
       )}
@@ -68,7 +76,7 @@ export function ChatFooter({
       {showEmojiPicker && (
         <div
           className={`mb-3 grid grid-cols-6 gap-2 rounded-2xl border p-3 sm:grid-cols-12 ${
-            isDark ? 'border-[#2a3942] bg-[#111b21]' : 'border-slate-200 bg-slate-50'
+            isDark ? 'border-[#2a3942] bg-[#111b21]' : 'border-[#d1d7db] bg-white'
           }`}
         >
           {EMOJI_OPTIONS.map((emoji) => (
@@ -77,8 +85,8 @@ export function ChatFooter({
               key={emoji}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => addEmoji(emoji)}
-              className={`rounded-xl p-2 text-xl shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                isDark ? 'bg-[#202c33] hover:bg-[#2a3942]' : 'bg-white hover:bg-blue-50'
+              className={`rounded-xl p-2 text-xl shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                isDark ? 'bg-[#202c33] hover:bg-[#2a3942]' : 'bg-[#f0f2f5] hover:bg-[#e9edef]'
               }`}
               title={`Add ${emoji}`}
             >
@@ -104,8 +112,8 @@ export function ChatFooter({
               key={`quick-${emoji}`}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => addEmoji(emoji)}
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                isDark ? 'bg-[#202c33] hover:bg-[#2a3942]' : 'bg-slate-100 hover:bg-blue-50'
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                isDark ? 'bg-[#111b21] hover:bg-[#2a3942]' : 'bg-white hover:bg-[#f5f6f6]'
               }`}
               title={`Add ${emoji}`}
             >
@@ -116,18 +124,18 @@ export function ChatFooter({
 
         <div
           className={`grid grid-cols-3 gap-x-3 gap-y-1 rounded-2xl px-3 py-2 text-[11px] sm:flex sm:items-center sm:gap-3 ${
-            isDark ? 'bg-[#202c33] text-[#aebac1]' : 'bg-slate-100 text-slate-600'
+            isDark ? 'bg-[#111b21] text-[#aebac1]' : 'bg-white text-[#667781]'
           }`}
         >
           <span>
-            <b className={isDark ? 'text-[#f0f2f5]' : 'text-slate-800'}>Net</b> {connectionStatus}
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Net</b> {connectionStatus}
           </span>
           <span>
-            <b className={isDark ? 'text-[#f0f2f5]' : 'text-slate-800'}>Chat</b>{' '}
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Chat</b>{' '}
             {chatLatency === null ? '--' : `${chatLatency}ms`}
           </span>
           <span>
-            <b className={isDark ? 'text-[#f0f2f5]' : 'text-slate-800'}>Voice</b>{' '}
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Voice</b>{' '}
             {isVoiceOn
               ? voicePeers === 0
                 ? 'waiting'
@@ -145,8 +153,8 @@ export function ChatFooter({
           type="button"
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => setShowEmojiPicker((open) => !open)}
-          className={`grid h-11 w-11 place-items-center rounded-full border text-sm transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-            isDark ? 'border-[#2a3942] bg-[#202c33] text-[#d1d7db]' : 'border-slate-200 bg-white'
+          className={`grid h-11 w-11 place-items-center rounded-full border text-sm transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+            isDark ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]' : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
           }`}
           aria-label="Add emoji"
           title="Add emoji"
@@ -156,8 +164,8 @@ export function ChatFooter({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className={`grid h-11 w-11 place-items-center rounded-full border text-xl transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-            isDark ? 'border-[#2a3942] bg-[#202c33] text-[#d1d7db]' : 'border-slate-200 bg-white'
+          className={`grid h-11 w-11 place-items-center rounded-full border text-xl transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+            isDark ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]' : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
           }`}
           aria-label="Attach file"
           title="Attach file"
@@ -167,12 +175,12 @@ export function ChatFooter({
         <button
           type="button"
           onClick={toggleVoiceChat}
-          className={`grid h-11 w-11 place-items-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+          className={`grid h-11 w-11 place-items-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
             isVoiceOn
-              ? 'border-emerald-300 bg-emerald-500 text-white'
+              ? 'border-[#00a884] bg-[#00a884] text-[#06261f]'
               : isDark
-                ? 'border-[#2a3942] bg-[#202c33] text-[#d1d7db]'
-                : 'border-slate-200 bg-white'
+                ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]'
+                : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
           }`}
           aria-label={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
           title={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
@@ -196,10 +204,10 @@ export function ChatFooter({
           onChange={(event) => setMessage(event.target.value)}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
-          className={`min-w-0 flex-1 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+          className={`min-w-0 flex-1 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 ${
             isDark
-              ? 'border-[#2a3942] bg-[#202c33] text-[#f0f2f5] placeholder-[#8696a0]'
-              : 'border-slate-300 bg-white text-slate-950 placeholder-slate-500'
+              ? 'border-[#2a3942] bg-[#2a3942] text-[#e9edef] placeholder-[#8696a0] focus:ring-[#00a884]'
+              : 'border-[#d1d7db] bg-white text-[#111b21] placeholder-[#667781] focus:ring-[#00a884]'
           }`}
           placeholder="Message, paste image, or attach file"
         />
@@ -207,7 +215,7 @@ export function ChatFooter({
           type="button"
           onPointerDown={(event) => event.preventDefault()}
           onClick={sendMessage}
-          className="rounded-full bg-blue-600 px-5 py-3 font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="rounded-full bg-[#00a884] px-5 py-3 font-semibold text-[#06261f] shadow transition hover:bg-[#06cf9c] focus:outline-none focus:ring-2 focus:ring-[#00a884] disabled:cursor-not-allowed disabled:bg-[#8696a0] disabled:text-[#d1d7db]"
           disabled={!message.trim()}
         >
           Send

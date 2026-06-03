@@ -24,12 +24,12 @@ export function VoiceRoomMenu({
       <button
         type="button"
         onClick={() => setShowVoiceMenu((open) => !open)}
-        className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+        className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
           isVoiceOn
-            ? 'bg-emerald-500 text-white'
+            ? 'bg-[#00a884] text-[#06261f]'
             : isDark
-              ? 'bg-slate-800 text-slate-200'
-              : 'bg-slate-100 text-slate-700'
+              ? 'bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]'
+              : 'bg-white text-[#3b4a54] hover:bg-[#f5f6f6]'
         }`}
       >
         Voice room ({participants.length})
@@ -37,7 +37,7 @@ export function VoiceRoomMenu({
       {showVoiceMenu && (
         <div
           className={`absolute bottom-12 left-0 z-30 w-72 rounded-2xl border p-3 shadow-2xl ${
-            isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+            isDark ? 'border-[#222e35] bg-[#111b21] text-[#e9edef]' : 'border-[#d1d7db] bg-white text-[#111b21]'
           }`}
         >
           <div className="mb-2 flex items-center justify-between">
@@ -52,7 +52,7 @@ export function VoiceRoomMenu({
           </div>
           <div className="space-y-2">
             {participants.length === 0 ? (
-              <p className={isDark ? 'text-sm text-slate-400' : 'text-sm text-slate-500'}>
+              <p className={isDark ? 'text-sm text-[#8696a0]' : 'text-sm text-[#667781]'}>
                 No one is in voice chat yet.
               </p>
             ) : (
@@ -60,15 +60,15 @@ export function VoiceRoomMenu({
                 const quality = member.stats?.quality || 'Unknown';
                 const qualityClass =
                   quality === 'Good'
-                    ? 'bg-emerald-500'
+                    ? 'bg-[#00a884]'
                     : quality === 'Fair'
-                      ? 'bg-yellow-500'
+                      ? 'bg-[#f5c542]'
                       : quality === 'Poor'
-                        ? 'bg-red-500'
-                        : 'bg-slate-400';
+                        ? 'bg-[#ef4444]'
+                        : 'bg-[#8696a0]';
 
                 return (
-                  <div key={member.id} className={`rounded-xl p-2 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                  <div key={member.id} className={`rounded-xl p-2 ${isDark ? 'bg-[#202c33]' : 'bg-[#f0f2f5]'}`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">
                         {member.id === socket?.id ? 'You' : member.name}
@@ -78,7 +78,7 @@ export function VoiceRoomMenu({
                         {quality}
                       </span>
                     </div>
-                    <p className={isDark ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs text-slate-500'}>
+                    <p className={isDark ? 'mt-1 text-xs text-[#8696a0]' : 'mt-1 text-xs text-[#667781]'}>
                       {member.stats?.latency === null || member.stats?.latency === undefined
                         ? 'Latency linking'
                         : `${member.stats.latency}ms`}

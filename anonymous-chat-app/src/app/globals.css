@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.wa-chat-bg-light {
+  background-color: #efeae2;
+  background-image:
+    radial-gradient(circle at 12px 16px, rgba(134, 150, 160, 0.12) 0 1px, transparent 1px),
+    radial-gradient(circle at 42px 36px, rgba(134, 150, 160, 0.1) 0 1px, transparent 1px);
+  background-size: 54px 54px;
+}
+
+.wa-chat-bg-dark {
+  background-color: #0b141a;
+  background-image:
+    radial-gradient(circle at 12px 16px, rgba(134, 150, 160, 0.08) 0 1px, transparent 1px),
+    radial-gradient(circle at 42px 36px, rgba(134, 150, 160, 0.06) 0 1px, transparent 1px);
+  background-size: 54px 54px;
+}

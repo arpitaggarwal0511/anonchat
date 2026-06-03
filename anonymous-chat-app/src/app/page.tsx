@@ -2,8 +2,50 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
+import { useAnonymousUser } from '@/features/chat/hooks/useAnonymousUser';
 import Footer from './Footer';
+
+const ROOM_CODE_LENGTH = 6;
+const ROOM_CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const ROOM_CODE_NUMBERS = '23456789';
+const ROOM_CODE_CHARS = `${ROOM_CODE_LETTERS}${ROOM_CODE_NUMBERS}`;
+
+const getRandomIndex = (max: number) => {
+  const values = new Uint32Array(1);
+
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(values);
+    return values[0] % max;
+  }
+
+  return Math.floor(Math.random() * max);
+};
+
+const pickChar = (source: string) => source[getRandomIndex(source.length)];
+
+const createRoomCode = () => {
+  const code = [pickChar(ROOM_CODE_LETTERS), pickChar(ROOM_CODE_NUMBERS)];
+
+  while (code.length < ROOM_CODE_LENGTH) {
+    code.push(pickChar(ROOM_CODE_CHARS));
+  }
+
+  for (let index = code.length - 1; index > 0; index -= 1) {
+    const swapIndex = getRandomIndex(index + 1);
+    [code[index], code[swapIndex]] = [code[swapIndex], code[index]];
+  }
+
+  return code.join('');
+};
+
+const normalizeRoomCode = (value: string) =>
+  value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, ROOM_CODE_LENGTH);
+
+const isValidRoomCode = (value: string) =>
+  value.length === ROOM_CODE_LENGTH && /[A-Z]/.test(value) && /[0-9]/.test(value);
 
 const productJsonLd = {
   '@context': 'https://schema.org',
@@ -61,7 +103,9 @@ const faqJsonLd = {
 export default function Home() {
   const router = useRouter();
   const [roomCode, setRoomCode] = useState('');
+  const [nameStatus, setNameStatus] = useState('');
   const [isDark, setIsDark] = useState(false);
+  const user = useAnonymousUser(setNameStatus);
 
   useEffect(() => {
     setIsDark(localStorage.getItem('anon-theme') === 'dark');
@@ -72,49 +116,59 @@ export default function Home() {
   }, [isDark]);
 
   const createRoom = () => {
-    router.push(`/chat/${uuidv4()}`);
+    user.commitDraftUsername();
+    router.push(`/chat/${createRoomCode()}`);
   };
 
   const joinRoom = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const code = roomCode.trim();
-    if (!code) return;
+    const code = normalizeRoomCode(roomCode);
+    if (!isValidRoomCode(code)) return;
+
+    user.commitDraftUsername();
     router.push(`/chat/${encodeURIComponent(code)}`);
   };
 
-  const shellClass = isDark
-    ? 'bg-slate-950 text-slate-100'
-    : 'bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_32%),#f8fafc] text-slate-950';
-  const panelClass = isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white';
+  const shellClass = isDark ? 'bg-[#0b141a] text-[#e9edef]' : 'bg-[#efeae2] text-[#111b21]';
+  const panelClass = isDark
+    ? 'border-[#222e35] bg-[#111b21]'
+    : 'border-[#d1d7db] bg-[#f0f2f5]';
+  const formPanelClass = isDark ? 'bg-[#0b141a]' : 'bg-[#efeae2]';
   const inputClass = isDark
-    ? 'border-slate-700 bg-slate-950 text-white placeholder-slate-500'
-    : 'border-slate-300 bg-slate-50 text-slate-950 placeholder-slate-500';
-  const mutedText = isDark ? 'text-slate-300' : 'text-slate-700';
-  const headingText = isDark ? 'text-white' : 'text-slate-950';
-  const cardClass = isDark ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-50 text-slate-700';
+    ? 'border-[#2a3942] bg-[#2a3942] text-[#e9edef] placeholder-[#8696a0]'
+    : 'border-[#d1d7db] bg-white text-[#111b21] placeholder-[#667781]';
+  const mutedText = isDark ? 'text-[#aebac1]' : 'text-[#54656f]';
+  const headingText = isDark ? 'text-[#e9edef]' : 'text-[#111b21]';
+  const cardClass = isDark
+    ? 'border border-[#222e35] bg-[#202c33] text-[#d1d7db]'
+    : 'border border-[#d1d7db] bg-white text-[#3b4a54]';
+  const canJoinRoom = isValidRoomCode(roomCode);
 
   return (
-    <div className={`flex min-h-screen flex-col ${shellClass}`}>
+    <div className={`relative flex min-h-screen flex-col ${shellClass}`}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify([productJsonLd, faqJsonLd]),
         }}
       />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 items-center px-4 py-10">
+      <div className="absolute inset-x-0 top-0 h-56 bg-[#00a884]" />
+      <main className="relative mx-auto flex w-full max-w-6xl flex-1 items-center px-4 py-10">
         <section className={`w-full overflow-hidden rounded-3xl border shadow-2xl ${panelClass}`}>
           <div className="grid gap-6 p-5 sm:p-8 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="flex flex-col justify-between gap-8">
               <div>
                 <div className="flex items-start justify-between gap-4">
-                  <p className="rounded-full bg-blue-600/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-blue-500">
+                  <p className="rounded-full bg-[#00a884]/10 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-[#00a884]">
                     ShitsApp anonymous chat
                   </p>
                   <button
                     type="button"
                     onClick={() => setIsDark((current) => !current)}
-                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border text-lg transition focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                      isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border text-lg transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                      isDark
+                        ? 'border-[#2a3942] bg-[#202c33] text-[#d1d7db]'
+                        : 'border-[#d1d7db] bg-white text-[#54656f]'
                     }`}
                     aria-label={isDark ? 'Switch to white mode' : 'Switch to dark mode'}
                     title={isDark ? 'Switch to white mode' : 'Switch to dark mode'}
@@ -140,7 +194,7 @@ export default function Home() {
                 </div>
                 <div className={`rounded-2xl p-4 ${cardClass}`}>
                   <p className={`text-2xl font-black ${headingText}`}>1</p>
-                  <p className="mt-1 text-sm">room code to share</p>
+                  <p className="mt-1 text-sm">Room code to share</p>
                 </div>
                 <div className={`rounded-2xl p-4 ${cardClass}`}>
                   <p className={`text-2xl font-black ${headingText}`}>{'\u221E'}</p>
@@ -149,24 +203,71 @@ export default function Home() {
               </div>
             </div>
 
-            <div className={`rounded-3xl p-5 shadow-inner ${isDark ? 'bg-slate-950' : 'bg-slate-100'}`}>
+            <div className={`rounded-3xl p-5 shadow-inner ${formPanelClass}`}>
               <h2 className={`text-2xl font-bold ${headingText}`}>Start a private room</h2>
               <p className={`mt-2 text-sm ${mutedText}`}>
-                Bring your own human. We provide the room code and the faint illusion of control.
+                Choose your name, then create or join a clean private room.
               </p>
 
-              <form onSubmit={joinRoom} className="mt-5 flex min-w-0 gap-2">
+              <div
+                className={`mt-5 rounded-2xl border p-4 ${
+                  isDark ? 'border-[#222e35] bg-[#202c33]' : 'border-[#d1d7db] bg-white'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="anon-name" className={`text-sm font-semibold ${headingText}`}>
+                    Your name
+                  </label>
+                  {nameStatus && <span className="text-xs font-semibold text-[#00a884]">{nameStatus}</span>}
+                </div>
+                <form onSubmit={user.saveUsername} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                  <input
+                    id="anon-name"
+                    value={user.draftUsername}
+                    onChange={(event) => {
+                      setNameStatus('');
+                      user.setDraftUsername(event.target.value);
+                    }}
+                    className={`min-w-0 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00a884] ${inputClass}`}
+                    placeholder="Choose your name"
+                    aria-label="Anonymous chat name"
+                    maxLength={24}
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-full bg-[#00a884] px-5 py-3 font-semibold text-[#06261f] transition hover:bg-[#06cf9c] focus:outline-none focus:ring-2 focus:ring-[#00a884] disabled:cursor-not-allowed disabled:bg-[#8696a0]"
+                    disabled={!user.draftUsername.trim()}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={user.randomizeUsername}
+                    className={`rounded-full border px-5 py-3 font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                      isDark
+                        ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]'
+                        : 'border-[#d1d7db] bg-white text-[#111b21] hover:bg-[#f5f6f6]'
+                    }`}
+                  >
+                    Random
+                  </button>
+                </form>
+              </div>
+
+              <form onSubmit={joinRoom} className="mt-4 flex min-w-0 gap-2">
                 <input
                   value={roomCode}
-                  onChange={(event) => setRoomCode(event.target.value)}
-                  className={`min-w-0 flex-1 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputClass}`}
-                  placeholder="Paste room code"
-                  aria-label="ShitsApp private room code"
+                  onChange={(event) => setRoomCode(normalizeRoomCode(event.target.value))}
+                  className={`min-w-0 flex-1 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00a884] ${inputClass}`}
+                  placeholder="ABC123"
+                  aria-label="Six character private room ID"
+                  autoCapitalize="characters"
+                  maxLength={ROOM_CODE_LENGTH}
                 />
                 <button
                   type="submit"
-                  className="rounded-full bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  disabled={!roomCode.trim()}
+                  className="rounded-full bg-[#00a884] px-5 py-3 font-semibold text-[#06261f] transition hover:bg-[#06cf9c] focus:outline-none focus:ring-2 focus:ring-[#00a884] disabled:cursor-not-allowed disabled:bg-[#8696a0]"
+                  disabled={!canJoinRoom}
                 >
                   Join
                 </button>
@@ -174,29 +275,33 @@ export default function Home() {
               <button
                 type="button"
                 onClick={createRoom}
-                className="mt-3 w-full rounded-full bg-blue-600 px-6 py-3 font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="mt-3 w-full rounded-full bg-[#00a884] px-6 py-3 font-semibold text-[#06261f] shadow transition hover:bg-[#06cf9c] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
               >
                 Create private ShitsApp room
               </button>
 
-              <div className={`mt-5 grid gap-3 rounded-2xl p-4 text-sm ${isDark ? 'bg-slate-900 text-slate-300' : 'bg-blue-50 text-slate-700'}`}>
+              <div
+                className={`mt-5 grid gap-3 rounded-2xl p-4 text-sm ${
+                  isDark ? 'bg-[#202c33] text-[#d1d7db]' : 'bg-[#d9fdd3] text-[#3b4a54]'
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 text-white">
+                  <span className="grid h-10 w-10 place-items-center rounded-full bg-[#00a884] text-[#06261f]">
                     1
                   </span>
-                  <span>Share only the room code. Revolutionary concept: consent.</span>
+                  <span>Rooms use short private IDs with letters and numbers.</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 text-white">
+                  <span className="grid h-10 w-10 place-items-center rounded-full bg-[#00a884] text-[#06261f]">
                     2
                   </span>
                   <span>Use emoji, pasted images, file attachments, and voice inside the room.</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-full bg-blue-600 text-white">
+                  <span className="grid h-10 w-10 place-items-center rounded-full bg-[#00a884] text-[#06261f]">
                     3
                   </span>
-                  <span>Change your anonymous name before sending. Identity crisis supported.</span>
+                  <span>Set your anonymous name from this menu before entering.</span>
                 </div>
               </div>
             </div>
@@ -205,12 +310,14 @@ export default function Home() {
           <section
             aria-labelledby="why-shitsapp"
             className={`border-t p-5 sm:p-8 ${
-              isDark ? 'border-slate-800 bg-slate-900/70 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-700'
+              isDark
+                ? 'border-[#222e35] bg-[#111b21] text-[#d1d7db]'
+                : 'border-[#d1d7db] bg-[#f0f2f5] text-[#3b4a54]'
             }`}
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-blue-500">
+                <p className="text-sm font-semibold uppercase tracking-wide text-[#00a884]">
                   Privacy settings, allegedly
                 </p>
                 <h2 id="why-shitsapp" className={`mt-2 text-3xl font-black ${headingText}`}>
@@ -223,19 +330,19 @@ export default function Home() {
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <article className={`rounded-2xl p-5 ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+              <article className={`rounded-2xl p-5 ${isDark ? 'bg-[#0b141a]' : 'bg-white'}`}>
                 <h3 className={`font-semibold ${headingText}`}>Anonymous by default</h3>
                 <p className="mt-2">
                   Start a private chat room without phone numbers, profile setup, or an emotional support cookie banner.
                 </p>
               </article>
-              <article className={`rounded-2xl p-5 ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+              <article className={`rounded-2xl p-5 ${isDark ? 'bg-[#0b141a]' : 'bg-white'}`}>
                 <h3 className={`font-semibold ${headingText}`}>Built for quick rooms</h3>
                 <p className="mt-2">
                   Share a room code with one person or a small group, then leave when the conversation has suffered enough.
                 </p>
               </article>
-              <article className={`rounded-2xl p-5 ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+              <article className={`rounded-2xl p-5 ${isDark ? 'bg-[#0b141a]' : 'bg-white'}`}>
                 <h3 className={`font-semibold ${headingText}`}>More than text</h3>
                 <p className="mt-2">
                   Send chat messages, paste images, attach files, and turn on voice when typing cannot carry the disappointment.
@@ -250,7 +357,7 @@ export default function Home() {
           </section>
         </section>
       </main>
-      <Footer />
+      <Footer isDark={isDark} />
     </div>
   );
 }
