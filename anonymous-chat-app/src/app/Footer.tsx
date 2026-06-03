@@ -1,13 +1,13 @@
-import React from 'react'
+import React from 'react';
 
 const Footer = () => {
   return (
-    <footer id="footer" className="p-4 bg-gray-900 text-white text-center w-full mt-auto rounded-lg ">
+    <footer id="footer" className="mt-auto w-full rounded-lg bg-gray-900 p-4 text-center text-white">
       <div className="container mx-auto">
-        © Privacy Settings Hidden for Your Convenience
-        </div>
+        Privacy settings hidden for your convenience. We are too broke to monetize your soul.
+      </div>
     </footer>
-  )
-}
+  );
+};
 
-export default Footer
+export default Footer;
