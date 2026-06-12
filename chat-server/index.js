@@ -2,60 +2,34 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-
-const rooms = {}; // ✅ { roomId: [ { user, text, timestamp } ] }
+const { registerChatHandlers } = require('./src/chatRooms');
+const { corsOptions, socketCorsOptions } = require('./src/cors');
+const { registerVoiceHandlers } = require('./src/voiceRooms');
 
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
+
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'anonchat socket server' });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: [
-  'http://localhost:3000',
-  'https://anon-chat-frontend.vercel.app', // your actual frontend URL
-]
-,
-    methods: ['GET', 'POST'],
-  },
+  cors: socketCorsOptions,
 });
-
 
 io.on('connection', (socket) => {
-  console.log('🟢 New user connected:', socket.id);
+  console.log('New user connected:', socket.id);
 
-  socket.on('join-room', (roomId, username) => {
-    socket.join(roomId);
-    console.log(`👥 ${username} joined room: ${roomId}`);
-
-    if (!rooms[roomId]) rooms[roomId] = [];
-
-    // 🔁 Send each past message via 'receive-message'
-    rooms[roomId].forEach((msg) => {
-      socket.emit('receive-message', msg);
-    });
-  });
-
-  socket.on('send-message', (roomId, msg) => {
-    const messageWithMeta = {
-      user: msg.user,
-      text: msg.text,
-      timestamp: new Date().toISOString(),
-    };
-
-    console.log(`📨 [${roomId}] New message from ${msg.user}: ${msg.text}`);
-
-    rooms[roomId].push(messageWithMeta);
-
-    // ✅ Emit message to all users in the room, including sender
-    io.in(roomId).emit('receive-message', messageWithMeta);
-  });
+  registerChatHandlers(io, socket);
+  registerVoiceHandlers(io, socket);
 
   socket.on('disconnect', () => {
-    console.log('🔴 User disconnected:', socket.id);
+    console.log('User disconnected:', socket.id);
   });
 });
 
-server.listen(3001, () => {
-  console.log('✅ Socket.IO server running on http://localhost:3001');
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Socket.IO server running on http://localhost:${PORT}`);
 });

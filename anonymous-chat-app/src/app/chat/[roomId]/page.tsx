@@ -1,143 +1,167 @@
 'use client';
 
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { getSocket } from '@/lib/socket';
-import { Socket } from 'socket.io-client';
-
-type ChatMessage = {
-  user: string;
-  text: string;
-  timestamp: string;
-};
+import type { Socket } from 'socket.io-client';
+import { getSocketUrl } from '@/lib/socket';
+import { ChatFooter } from '@/features/chat/components/ChatFooter';
+import { ChatHeader } from '@/features/chat/components/ChatHeader';
+import { ImagePreviewDialog } from '@/features/chat/components/ImagePreviewDialog';
+import { MessageList } from '@/features/chat/components/MessageList';
+import { useAnonymousUser } from '@/features/chat/hooks/useAnonymousUser';
+import { useChatMessages } from '@/features/chat/hooks/useChatMessages';
+import { useChatSocket } from '@/features/chat/hooks/useChatSocket';
+import { useNetworkStats } from '@/features/chat/hooks/useNetworkStats';
+import { usePagePresence } from '@/features/chat/hooks/usePagePresence';
+import { useThemeMode } from '@/features/chat/hooks/useThemeMode';
+import { useVoiceChat } from '@/features/chat/hooks/useVoiceChat';
+import type { ImagePreview } from '@/features/chat/types';
 
 export default function ChatRoom() {
   const params = useParams();
   const roomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
-  const [username, setUsername] = useState('');
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeImage, setActiveImage] = useState<ImagePreview | null>(null);
+  const [socketUrl] = useState(getSocketUrl);
+  const isPageActive = usePagePresence();
+  const { isDark, setIsDark } = useThemeMode();
+  const user = useAnonymousUser(setStatusMessage);
 
-  // Keep same function reference across renders for cleanup
-  const handleReceive = (msg: ChatMessage) => {
-    console.log('📨 Received:', msg); // Debug
-    setMessages((prev) => [...prev, msg]);
+  const keepInputFocused = () => {
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    });
   };
 
-  useEffect(() => {
-    if (!roomId) return;
+  const chat = useChatMessages({
+    roomId,
+    username: user.username,
+    socketRef,
+    onStatus: setStatusMessage,
+    keepInputFocused,
+  });
+  const {
+    message,
+    messages,
+    setMessage,
+    receiveMessage,
+    applyReadReceipt,
+    markMessagesAsRead,
+    sendMessage: sendChatMessage,
+    handlePaste,
+    handleFileChange,
+    handleKeyDown,
+  } = chat;
 
-    let stored = localStorage.getItem('anon-username');
-    if (!stored) {
-      const animals = ['Tiger', 'Fox', 'Panda', 'Wolf'];
-      const colors = ['Blue', 'Red', 'Green', 'Purple'];
-      stored =
-        colors[Math.floor(Math.random() * colors.length)] +
-        animals[Math.floor(Math.random() * animals.length)] +
-        Math.floor(Math.random() * 100);
-      localStorage.setItem('anon-username', stored);
-    }
-    setUsername(stored);
+  const network = useNetworkStats({
+    socketRef,
+    socketUrl,
+    onStatus: setStatusMessage,
+  });
 
-    const socket = getSocket();
-    socketRef.current = socket;
+  const voice = useVoiceChat({
+    roomId,
+    username: user.username,
+    socketRef,
+    connectionStatus: network.connectionStatus,
+    onStatus: setStatusMessage,
+  });
 
-    if (socket.connected) {
-      socket.emit('join-room', roomId, stored);
-    } else {
-      socket.on('connect', () => {
-        console.log('✅ Connected after reconnect');
-        socket.emit('join-room', roomId, stored);
-      });
-    }
+  useChatSocket({
+    roomId,
+    username: user.username,
+    socketRef,
+    onMessage: receiveMessage,
+    onMessageRead: applyReadReceipt,
+    voiceHandlers: voice.handlers,
+  });
 
-    socket.on('receive-message', handleReceive);
+  useLayoutEffect(() => {
+    markMessagesAsRead(isPageActive);
+  }, [isPageActive, messages, markMessagesAsRead]);
 
-    return () => {
-      console.log('🧹 Cleaning up socket listeners');
-      socket.off('receive-message', handleReceive);
-      socket.off('connect'); // Cleanup any reconnect listeners too
-    };
-  }, [roomId]);
+  useLayoutEffect(() => {
+    const chatPane = chatScrollRef.current;
+    if (!chatPane) return;
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatPane.scrollTop = chatPane.scrollHeight;
   }, [messages]);
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
-
-    const msgObj: ChatMessage = {
-      user: username,
-      text: message.trim(),
-      timestamp: new Date().toISOString(),
-    };
-
-    // setMessages((prev) => [...prev, msgObj]);
-    socketRef.current?.emit('send-message', roomId, msgObj);
-    setMessage('');
+  const addEmoji = (emoji: string) => {
+    setMessage(`${message}${emoji}`);
+    keepInputFocused();
   };
 
+  const sendMessage = () => {
+    sendChatMessage();
+    setShowEmojiPicker(false);
+  };
+
+  const copyRoomCode = async () => {
+    if (!roomId) return;
+    await navigator.clipboard.writeText(roomId);
+    setStatusMessage('Room code copied.');
+  };
+
+  const shellClass = isDark ? 'bg-[#0b141a] text-[#e9edef]' : 'bg-[#efeae2] text-[#111b21]';
+  const panelClass = isDark ? 'bg-[#0b141a] shadow-black' : 'bg-[#efeae2] shadow-[#d1d7db]';
+  const headerClass = isDark ? 'border-[#222e35] bg-[#202c33]/95' : 'border-[#d1d7db] bg-[#f0f2f5]/95';
+
   return (
-    <div className="min-h-screen bg-white p-4 flex flex-col max-w-2xl mx-auto">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-black">
-          Room ID: <span className="text-blue-700 break-all">{roomId}</span>
-        </h2>
-        <p className="text-black mt-1">
-          Logged in as: <b>{username}</b>
-        </p>
-      </div>
-
-      <div className="flex-1 border rounded-lg p-4 h-[60vh] overflow-y-auto bg-gray-50 shadow space-y-2">
-        {messages.length === 0 ? (
-          <p className="text-gray-500">No messages yet</p>
-        ) : (
-          <>
-            {messages.map((msg, idx) => {
-              const isOwn = msg.user === username;
-              return (
-                <div
-                  key={idx}
-                  className={`flex flex-col w-fit max-w-[80%] ${
-                    isOwn ? 'ml-auto items-end' : 'items-start'
-                  }`}
-                >
-                  <div
-                    className={`px-3 py-2 rounded-md text-sm ${
-                      isOwn ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-900'
-                    }`}
-                  >
-                    <b>{msg.user}:</b> {msg.text}
-                  </div>
-                  <span className="text-xs text-gray-500 mt-1">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-              );
-            })}
-            <div ref={chatEndRef} />
-          </>
-        )}
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          className="flex-1 border border-gray-300 px-4 py-2 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-500"
-          placeholder="Type a message..."
+    <div className={`h-[100dvh] overflow-hidden ${shellClass}`}>
+      <div className={`mx-auto flex h-[100dvh] max-w-6xl flex-col overflow-hidden shadow-2xl ${panelClass}`}>
+        <ChatHeader
+          roomId={roomId}
+          username={user.username}
+          isDark={isDark}
+          headerClass={headerClass}
+          setIsDark={setIsDark}
+          copyRoomCode={copyRoomCode}
         />
-        <button
-          onClick={sendMessage}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md shadow focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          Send
-        </button>
+
+        <MessageList
+          messages={messages}
+          username={user.username}
+          currentUserId={socketRef.current?.id}
+          isDark={isDark}
+          chatScrollRef={chatScrollRef}
+          setActiveImage={setActiveImage}
+        />
+
+        <ChatFooter
+          isDark={isDark}
+          headerClass={headerClass}
+          statusMessage={statusMessage}
+          showEmojiPicker={showEmojiPicker}
+          message={message}
+          connectionStatus={network.connectionStatus}
+          chatLatency={network.chatLatency}
+          isVoiceOn={voice.isVoiceOn}
+          voicePeers={voice.voicePeers}
+          voiceLatency={voice.voiceLatency}
+          voiceParticipants={voice.voiceParticipants}
+          showVoiceMenu={voice.showVoiceMenu}
+          socket={socketRef.current}
+          inputRef={inputRef}
+          fileInputRef={fileInputRef}
+          setMessage={setMessage}
+          setShowEmojiPicker={setShowEmojiPicker}
+          setShowVoiceMenu={voice.setShowVoiceMenu}
+          addEmoji={addEmoji}
+          sendMessage={sendMessage}
+          toggleVoiceChat={voice.toggleVoiceChat}
+          handlePaste={handlePaste}
+          handleFileChange={handleFileChange}
+          handleKeyDown={handleKeyDown}
+        />
       </div>
+
+      <ImagePreviewDialog image={activeImage} onClose={() => setActiveImage(null)} />
     </div>
   );
 }

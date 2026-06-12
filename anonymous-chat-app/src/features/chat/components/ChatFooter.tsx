@@ -1,0 +1,226 @@
+import type { ChangeEvent, ClipboardEvent, Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
+import type { Socket } from 'socket.io-client';
+import { EMOJI_OPTIONS, QUICK_EMOJI_COUNT } from '../constants';
+import type { VoiceParticipant } from '../types';
+import { VoiceRoomMenu } from './VoiceRoomMenu';
+
+type ChatFooterProps = {
+  isDark: boolean;
+  headerClass: string;
+  statusMessage: string;
+  showEmojiPicker: boolean;
+  message: string;
+  connectionStatus: string;
+  chatLatency: number | null;
+  isVoiceOn: boolean;
+  voicePeers: number;
+  voiceLatency: number | null;
+  voiceParticipants: VoiceParticipant[];
+  showVoiceMenu: boolean;
+  socket: Socket | null;
+  inputRef: RefObject<HTMLInputElement | null>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  setMessage: (value: string) => void;
+  setShowEmojiPicker: (updater: (open: boolean) => boolean) => void;
+  setShowVoiceMenu: Dispatch<SetStateAction<boolean>>;
+  addEmoji: (emoji: string) => void;
+  sendMessage: () => void;
+  toggleVoiceChat: () => void;
+  handlePaste: (event: ClipboardEvent<HTMLInputElement>) => void;
+  handleFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  handleKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+};
+
+export function ChatFooter({
+  isDark,
+  headerClass,
+  statusMessage,
+  showEmojiPicker,
+  message,
+  connectionStatus,
+  chatLatency,
+  isVoiceOn,
+  voicePeers,
+  voiceLatency,
+  voiceParticipants,
+  showVoiceMenu,
+  socket,
+  inputRef,
+  fileInputRef,
+  setMessage,
+  setShowEmojiPicker,
+  setShowVoiceMenu,
+  addEmoji,
+  sendMessage,
+  toggleVoiceChat,
+  handlePaste,
+  handleFileChange,
+  handleKeyDown,
+}: ChatFooterProps) {
+  return (
+    <footer className={`shrink-0 border-t px-3 py-2 sm:px-6 sm:py-3 ${headerClass}`}>
+      {statusMessage && (
+        <p
+          className={`mb-2 rounded-xl px-3 py-2 text-sm ${
+            statusMessage.includes('large')
+              ? 'bg-[#ef4444]/10 text-[#ef4444]'
+              : isDark
+                ? 'bg-[#00a884]/10 text-[#00a884]'
+                : 'bg-[#d9fdd3] text-[#008069]'
+          }`}
+        >
+          {statusMessage}
+        </p>
+      )}
+
+      {showEmojiPicker && (
+        <div
+          className={`mb-3 grid grid-cols-6 gap-2 rounded-2xl border p-3 sm:grid-cols-12 ${
+            isDark ? 'border-[#2a3942] bg-[#111b21]' : 'border-[#d1d7db] bg-white'
+          }`}
+        >
+          {EMOJI_OPTIONS.map((emoji) => (
+            <button
+              type="button"
+              key={emoji}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => addEmoji(emoji)}
+              className={`rounded-xl p-2 text-xl shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                isDark ? 'bg-[#202c33] hover:bg-[#2a3942]' : 'bg-[#f0f2f5] hover:bg-[#e9edef]'
+              }`}
+              title={`Add ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex flex-wrap gap-2 pb-1 sm:pb-0">
+          <VoiceRoomMenu
+            isDark={isDark}
+            isVoiceOn={isVoiceOn}
+            participants={voiceParticipants}
+            socket={socket}
+            showVoiceMenu={showVoiceMenu}
+            setShowVoiceMenu={setShowVoiceMenu}
+          />
+          {EMOJI_OPTIONS.slice(0, QUICK_EMOJI_COUNT).map((emoji) => (
+            <button
+              type="button"
+              key={`quick-${emoji}`}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => addEmoji(emoji)}
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+                isDark ? 'bg-[#111b21] hover:bg-[#2a3942]' : 'bg-white hover:bg-[#f5f6f6]'
+              }`}
+              title={`Add ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+
+        <div
+          className={`grid grid-cols-3 gap-x-3 gap-y-1 rounded-2xl px-3 py-2 text-[11px] sm:flex sm:items-center sm:gap-3 ${
+            isDark ? 'bg-[#111b21] text-[#aebac1]' : 'bg-white text-[#667781]'
+          }`}
+        >
+          <span>
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Net</b> {connectionStatus}
+          </span>
+          <span>
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Chat</b>{' '}
+            {chatLatency === null ? '--' : `${chatLatency}ms`}
+          </span>
+          <span>
+            <b className={isDark ? 'text-[#e9edef]' : 'text-[#111b21]'}>Voice</b>{' '}
+            {isVoiceOn
+              ? voicePeers === 0
+                ? 'waiting'
+                : `${voicePeers} peer${voicePeers === 1 ? '' : 's'} / ${
+                    voiceLatency === null ? 'linking' : `${voiceLatency}ms`
+                  }`
+              : 'off'}
+          </span>
+        </div>
+      </div>
+
+      <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setShowEmojiPicker((open) => !open)}
+          className={`grid h-11 w-11 place-items-center rounded-full border text-sm transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+            isDark ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]' : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
+          }`}
+          aria-label="Add emoji"
+          title="Add emoji"
+        >
+          :)
+        </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className={`grid h-11 w-11 place-items-center rounded-full border text-xl transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+            isDark ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]' : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
+          }`}
+          aria-label="Attach file"
+          title="Attach file"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          onClick={toggleVoiceChat}
+          className={`grid h-11 w-11 place-items-center rounded-full border transition focus:outline-none focus:ring-2 focus:ring-[#00a884] ${
+            isVoiceOn
+              ? 'border-[#00a884] bg-[#00a884] text-[#06261f]'
+              : isDark
+                ? 'border-[#2a3942] bg-[#111b21] text-[#d1d7db] hover:bg-[#2a3942]'
+                : 'border-[#d1d7db] bg-white text-[#54656f] hover:bg-[#f5f6f6]'
+          }`}
+          aria-label={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
+          title={isVoiceOn ? 'Leave voice chat' : 'Join voice chat'}
+        >
+          <svg
+            aria-hidden="true"
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.35 1.89.68 2.78a2 2 0 0 1-.45 2.11L8.09 9.86a16 16 0 0 0 6 6l1.25-1.25a2 2 0 0 1 2.11-.45c.89.33 1.82.56 2.78.68A2 2 0 0 1 22 16.92Z" />
+          </svg>
+        </button>
+        <input
+          ref={inputRef}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          className={`min-w-0 flex-1 rounded-full border px-4 py-3 shadow-sm focus:outline-none focus:ring-2 ${
+            isDark
+              ? 'border-[#2a3942] bg-[#2a3942] text-[#e9edef] placeholder-[#8696a0] focus:ring-[#00a884]'
+              : 'border-[#d1d7db] bg-white text-[#111b21] placeholder-[#667781] focus:ring-[#00a884]'
+          }`}
+          placeholder="Message, paste image, or attach file"
+        />
+        <button
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={sendMessage}
+          className="rounded-full bg-[#00a884] px-5 py-3 font-semibold text-[#06261f] shadow transition hover:bg-[#06cf9c] focus:outline-none focus:ring-2 focus:ring-[#00a884] disabled:cursor-not-allowed disabled:bg-[#8696a0] disabled:text-[#d1d7db]"
+          disabled={!message.trim()}
+        >
+          Send
+        </button>
+      </div>
+    </footer>
+  );
+}
